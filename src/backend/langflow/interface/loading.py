@@ -37,11 +37,28 @@ def instantiate_class(node_type: str, base_type: str, params: Dict) -> Any:
     if base_type == "agents":
         # We need to initialize it differently
         return load_agent_executor(class_object, params)
+    elif base_type == "documentloaders":
+        return class_object(**params).load()
+    elif base_type == "embeddings":
+        params.pop("model")
+        return class_object(**params)
     elif base_type == "prompts":
         if node_type == "ZeroShotPrompt":
             if "tools" not in params:
                 params["tools"] = []
             return ZeroShotAgent.create_prompt(**params)
+    elif base_type == "textsplitters":
+        documents = params.pop("documents")
+        text_splitter = class_object(**params)
+        return text_splitter.split_documents(documents)
+    elif base_type == "toolkits":
+        loaded_toolkit = class_object(**params)
+        # Check if node_type has a loader
+        return (
+            load_toolkits_executor(node_type, loaded_toolkit, params)
+            if toolkits_creator.has_create_function(node_type)
+            else loaded_toolkit
+        )
     elif base_type == "tools":
         if node_type == "JsonSpec":
             params["dict_"] = load_file_into_dict(params.pop("path"))
@@ -58,27 +75,12 @@ def instantiate_class(node_type: str, base_type: str, params: Dict) -> Any:
             raise ValueError("Function should be a string")
         elif node_type.lower() == "tool":
             return class_object(**params)
-    elif base_type == "toolkits":
-        loaded_toolkit = class_object(**params)
-        # Check if node_type has a loader
-        if toolkits_creator.has_create_function(node_type):
-            return load_toolkits_executor(node_type, loaded_toolkit, params)
-        return loaded_toolkit
-    elif base_type == "embeddings":
-        params.pop("model")
-        return class_object(**params)
-    elif base_type == "vectorstores":
-        return class_object.from_documents(**params)
-    elif base_type == "documentloaders":
-        return class_object(**params).load()
-    elif base_type == "textsplitters":
-        documents = params.pop("documents")
-        text_splitter = class_object(**params)
-        return text_splitter.split_documents(documents)
     elif base_type == "utilities":
         if node_type == "SQLDatabase":
             return class_object.from_uri(params.pop("uri"))
 
+    elif base_type == "vectorstores":
+        return class_object.from_documents(**params)
     return class_object(**params)
 
 
